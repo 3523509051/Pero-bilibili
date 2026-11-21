@@ -1,0 +1,16 @@
+LICENSE
+NOTICE.md
+README.md
+RELEASE.md
+bilibili_video/__init__.py
+bilibili_video/cache.py
+bilibili_video/contact_sheet.py
+bilibili_video/fetch.py
+bilibili_video/models.py
+bilibili_video/resolve.py
+bilibili_video/sdk_fetcher.py
+bilibili_video/service.py
+plugin.json
+plugin_adapter.py
+pyproject.toml
+requirements.lock.txt
