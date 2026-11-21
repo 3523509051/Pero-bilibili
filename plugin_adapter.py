@@ -129,7 +129,7 @@ def register():
 
     return [{
         "name": "watch_bilibili",
-        "description": "读取用户给定的完整 B 站视频链接：分P元数据、真实时间戳拼图与有界字幕预览；需管理员批准对应公开域名。",
+        "description": "结合当前及近期对话理解用户是否在要求观看或分析 B 站视频；如相关链接在消息、引用卡片或上下文中，调用本工具读取视频信息、字幕与分镜。",
         "parameters": {
             "type": "object",
             "properties": {

@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "video.bilibili",
   "name": "B站视频理解",
-  "description": "按现行通用 SDK v1 通过宿主批准的公开 HTTPS 服务读取分P、字幕与故事板拼图；缓存按 BV/CID/分P/配置隔离。",
-  "version": "0.1.1",
+  "description": "依据对话语义判断用户是否希望查看视频；结合当前或近期消息中的 B 站链接读取分P、字幕与故事板拼图。",
+  "version": "0.1.2",
   "sdk_version": "1",
   "entrypoint": "plugin_adapter:register",
   "license": "MIT",
@@ -17,7 +17,7 @@
   "config_schema": {
     "type": "object",
     "properties": {
-      "frame_count": {"type": "integer", "minimum": 1, "maximum": 6, "default": 6},
+      "frame_count": {"type": "integer", "minimum": 1, "maximum": 12, "default": 6},
       "subtitle_language": {"type": "string", "enum": ["auto", "zh-CN", "en-US"], "default": "auto"}
     },
     "additionalProperties": false

@@ -1,8 +1,8 @@
 # Pero-bilibili · B 站视频理解插件
 
-让 [Pero](https://github.com/3523509051/Pero) 理解你分享的 B 站视频。发送视频链接后，插件读取视频信息、可用字幕与故事板，生成带真实时间戳的分镜图，再交给 Agent 理解内容。
+让 [Pero](https://github.com/3523509051/Pero) 理解对话中分享的 B 站视频。Agent 根据上下文判断是否需要观看；链接可以来自当前消息、微信引用卡片或近期对话。插件读取视频信息、可用字幕与故事板，生成带真实时间戳的分镜图，再交给 Agent 理解内容。
 
-**v0.1.1 · 公开试验版** · Pero Plugin SDK v1 RC · MIT License
+**v0.1.2 · 公开试验版** · Pero Plugin SDK v1 RC · MIT License
 
 ## 功能
 
@@ -29,7 +29,7 @@
 
    > 帮我看看这个视频主要讲了什么：https://www.bilibili.com/video/BV1xx411c7mD
 
-插件注册的唯一工具为 `watch_bilibili(url, refresh=false)`。如需绕过已有缓存重新处理，可用 `refresh=true` 发起新请求；普通重复访问优先命中缓存。
+插件注册的唯一工具为 `watch_bilibili(url, refresh=false)`。Agent 按对话语义判断观看意图，不要求用户必须使用特定关键词或引用卡片；应从当前消息、卡片引用和近期上下文中解析视频链接。只有确实没有可用链接时才询问用户。如需绕过已有缓存重新处理，可用 `refresh=true` 发起新请求；普通重复访问优先命中缓存。
 
 ## 链接支持
 
@@ -48,7 +48,7 @@
 
 | 配置 | 默认值 | 说明 |
 |---|---|---|
-| `frame_count` | 6 | 采样帧数，1–6 |
+| `frame_count` | 6 | 采样帧数，1–12；较高值会增加读取时间和合成图尺寸 |
 | `subtitle_language` | `auto` | 自动选择或 `zh-CN`、`en-US` |
 
 需按实际功能批准的公开 HTTPS 域名：

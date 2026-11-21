@@ -18,8 +18,8 @@ class VideoOptions:
     cache_ttl_hours: float = 24.0
 
     def __post_init__(self) -> None:
-        if not 1 <= int(self.frame_count) <= 6:
-            raise ValueError("frame_count 必须在 1-6")
+        if not 1 <= int(self.frame_count) <= 12:
+            raise ValueError("frame_count 必须在 1-12")
         if not self.credential_domain or len(self.credential_domain) > 80:
             raise ValueError("credential_domain 不合法")
 
