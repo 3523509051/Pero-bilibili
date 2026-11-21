@@ -2,7 +2,7 @@
 
 让 [Pero](https://github.com/3523509051/Pero) 理解你分享的 B 站视频。发送视频链接后，插件读取视频信息、可用字幕与故事板，生成带真实时间戳的分镜图，再交给 Agent 理解内容。
 
-**v0.1.0 · 首个公开试验版** · Pero Plugin SDK v1 RC · MIT License
+**v0.1.1 · 公开试验版** · Pero Plugin SDK v1 RC · MIT License
 
 ## 功能
 
@@ -17,7 +17,7 @@
 需要支持后台工具与受控短链读取的 **Pero Plugin SDK v1 RC**。
 
 1. 打开 Pero 控制站 → **插件** → **从 GitHub 固定版本安装**。
-2. 输入以下仓库地址，版本填写 `v0.1.0`。
+2. 输入以下仓库地址，版本填写 `v0.1.1`。
 
    ```text
    https://github.com/3523509051/Pero-bilibili
@@ -57,6 +57,8 @@
 |---|---|
 | `api.bilibili.com` | 视频信息、故事板索引、字幕列表 |
 | `i0.hdslb.com` | 已核对的故事板图片服务 |
+| `bimp.hdslb.com` | 其他故事板图片服务，实际视频元数据已验证 |
+| `boss.hdslb.com` | 故事板时间戳索引，实际视频元数据已验证 |
 | `b23.tv` | 短链接入口 |
 | `www.bilibili.com` | 短链接的标准视频目标 |
 | `m.bilibili.com` | 手机端视频目标 |

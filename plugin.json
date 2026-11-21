@@ -3,7 +3,7 @@
   "id": "video.bilibili",
   "name": "B站视频理解",
   "description": "按现行通用 SDK v1 通过宿主批准的公开 HTTPS 服务读取分P、字幕与故事板拼图；缓存按 BV/CID/分P/配置隔离。",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "sdk_version": "1",
   "entrypoint": "plugin_adapter:register",
   "license": "MIT",
@@ -11,7 +11,7 @@
   "dependencies": ["httpx==0.28.1", "Pillow==11.3.0"],
   "tools": ["watch_bilibili"],
   "capabilities": ["network.read", "cache.private", "artifact.image", "events.emit"],
-  "network_hosts": ["api.bilibili.com", "i0.hdslb.com", "b23.tv", "www.bilibili.com", "m.bilibili.com"],
+  "network_hosts": ["api.bilibili.com", "i0.hdslb.com", "bimp.hdslb.com", "boss.hdslb.com", "b23.tv", "www.bilibili.com", "m.bilibili.com"],
   "background_tools": ["watch_bilibili"],
   "background_timeout_seconds": 180,
   "config_schema": {
