@@ -7,6 +7,13 @@
 from __future__ import annotations
 
 import re
+import asyncio
+import hashlib
+import json
+import os
+import tempfile
+import time
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Iterable, Mapping
 from urllib.parse import urlsplit
 
@@ -29,9 +36,72 @@ def normalize_url(url: str) -> str:
 
 
 class SDKNetworkFetcher:
-    def __init__(self, reader: Reader, hosts: Iterable[str]) -> None:
+    _locks: dict[str, asyncio.Lock] = {}
+
+    def __init__(self, reader: Reader, hosts: Iterable[str], *,
+                 cache_dir: Path | None = None, cache_ttl_seconds: float = 30 * 86400,
+                 refresh: bool = False) -> None:
         self._reader = reader
         self._hosts = frozenset(str(host).lower() for host in hosts)
+        self._cache_dir = Path(cache_dir) if cache_dir is not None else None
+        self._cache_ttl_seconds = max(0.0, float(cache_ttl_seconds))
+        self._refresh = bool(refresh)
+
+    def _cache_path(self, target: str) -> Path | None:
+        if self._cache_dir is None:
+            return None
+        key = hashlib.sha256(target.encode("utf-8")).hexdigest()
+        return self._cache_dir / "source" / (key + ".bin")
+
+    async def _cached_read(self, target: str, *, max_bytes: int, timeout: float,
+                           redirect_metadata: bool = False) -> Mapping[str, Any]:
+        path = self._cache_path(target)
+        if path is None or self._cache_ttl_seconds <= 0:
+            return await self._reader(target, max_bytes=max_bytes, timeout=timeout,
+                                      **({"redirect_metadata": True} if redirect_metadata else {}))
+        key = str(path)
+        lock = self._locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            meta_path = path.with_suffix(".json")
+            if not self._refresh:
+                try:
+                    meta = await asyncio.to_thread(lambda: json.loads(meta_path.read_text(encoding="utf-8")))
+                    data = await asyncio.to_thread(path.read_bytes)
+                    valid = (time.time() - float(meta.get("stored_at", 0)) <= self._cache_ttl_seconds
+                             and hashlib.sha256(data).hexdigest() == meta.get("sha256"))
+                    if valid:
+                        result = {"bytes": data}
+                        if redirect_metadata:
+                            result.update({"status_code": meta.get("status_code"),
+                                           "location": meta.get("location")})
+                        return result
+                except (OSError, ValueError, TypeError):
+                    pass
+            response = await self._reader(target, max_bytes=max_bytes, timeout=timeout,
+                                          **({"redirect_metadata": True} if redirect_metadata else {}))
+            body = response.get("bytes") if isinstance(response, Mapping) else None
+            if isinstance(body, bytes):
+                def write() -> None:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    descriptor, temporary = tempfile.mkstemp(prefix=path.name + "-", dir=path.parent)
+                    try:
+                        with os.fdopen(descriptor, "wb") as stream:
+                            stream.write(body)
+                            stream.flush()
+                            os.fsync(stream.fileno())
+                        os.replace(temporary, path)
+                        record = {"stored_at": time.time(), "sha256": hashlib.sha256(body).hexdigest()}
+                        if redirect_metadata:
+                            record.update({"status_code": response.get("status_code"),
+                                           "location": response.get("location")})
+                        meta_tmp = meta_path.with_suffix(".json.tmp")
+                        meta_tmp.write_text(json.dumps(record, sort_keys=True), encoding="utf-8")
+                        os.replace(meta_tmp, meta_path)
+                    finally:
+                        if os.path.exists(temporary):
+                            os.unlink(temporary)
+                await asyncio.to_thread(write)
+            return response
 
     async def _get(self, url: str, *, max_bytes: int = 4 * 1024 * 1024,
                    timeout: float = 15.0) -> Mapping[str, Any]:
@@ -40,7 +110,7 @@ class SDKNetworkFetcher:
         host = (parts.hostname or "").lower()
         if parts.scheme != "https" or not host or host not in self._hosts:
             raise NetworkHostDenied(host or "unknown")
-        response = await self._reader(target, max_bytes=max_bytes, timeout=timeout)
+        response = await self._cached_read(target, max_bytes=max_bytes, timeout=timeout)
         if not isinstance(response, Mapping) or not isinstance(response.get("bytes"), bytes):
             raise ValueError("invalid_network_response")
         return response
@@ -103,8 +173,8 @@ class SDKNetworkFetcher:
             parts = urlsplit(current)
             if parts.scheme != "https" or (parts.hostname or "").lower() not in self._hosts:
                 raise NetworkHostDenied(parts.hostname or "unknown")
-            response = await self._reader(current, max_bytes=4096, timeout=15,
-                                          redirect_metadata=True)
+            response = await self._cached_read(current, max_bytes=4096, timeout=15,
+                                               redirect_metadata=True)
             if not isinstance(response, Mapping):
                 raise ValueError("invalid_network_response")
             status = int(response.get("status_code") or 0)

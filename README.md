@@ -2,14 +2,14 @@
 
 让 [Pero](https://github.com/3523509051/Pero) 理解对话中分享的 B 站视频。Agent 根据上下文判断是否需要观看；链接可以来自当前消息、微信引用卡片或近期对话。插件读取视频信息、可用字幕与故事板，生成带真实时间戳的分镜图，再交给 Agent 理解内容。
 
-**v0.1.2 · 公开试验版** · Pero Plugin SDK v1 RC · MIT License
+**v0.1.3 · 公开试验版** · Pero Plugin SDK v1 RC · MIT License
 
 ## 功能
 
 - 支持电脑端、手机端标准 BV 视频链接、分享参数及 `b23.tv` 短链接。
 - 从公开视频的故事板提取实际时间点的画面，最多六帧合成一张图，无需默认下载整段视频。
 - 读取可获取的字幕，保存完整时间戳字幕文件，向 Agent 返回有限摘录及分镜图。
-- 按 BV、CID、分 P 及处理配置缓存，重复访问时复用已有拼图与字幕，减少重复网络读取。
+- 按 BV、CID、分 P 及处理配置缓存拼图；插件私有磁盘缓存同时复用视频详情、故事板和字幕 HTTPS 响应。
 - 后台执行：视频处理期间正常聊天，完成后由 Pero 回报结果；也可从控制站查看或取消任务。
 
 ## 安装到 Pero
@@ -29,7 +29,7 @@
 
    > 帮我看看这个视频主要讲了什么：https://www.bilibili.com/video/BV1xx411c7mD
 
-插件注册的唯一工具为 `watch_bilibili(url, refresh=false)`。Agent 按对话语义判断观看意图，不要求用户必须使用特定关键词或引用卡片；应从当前消息、卡片引用和近期上下文中解析视频链接。只有确实没有可用链接时才询问用户。如需绕过已有缓存重新处理，可用 `refresh=true` 发起新请求；普通重复访问优先命中缓存。
+插件注册的唯一工具为 `watch_bilibili(url, refresh=false)`。Agent 按对话语义判断观看意图，不要求用户必须使用特定关键词或引用卡片；应从当前消息、卡片引用和近期上下文中解析视频链接。只有确实没有可用链接时才询问用户。相同链接的公开视频响应和已生成拼图存入插件私有磁盘缓存；`refresh=true` 才重新读取来源并更新缓存。
 
 ## 链接支持
 
@@ -48,7 +48,7 @@
 
 | 配置 | 默认值 | 说明 |
 |---|---|---|
-| `frame_count` | 6 | 采样帧数，1–12；较高值会增加读取时间和合成图尺寸 |
+| `frame_count` | 0（自适应） | 0 时按画面变化和每 30 秒时间锚点抽帧；正数时按指定数量均匀抽帧，不设帧数上限。旧配置 6 可继续使用 |
 | `subtitle_language` | `auto` | 自动选择或 `zh-CN`、`en-US` |
 
 需按实际功能批准的公开 HTTPS 域名：
@@ -81,7 +81,7 @@ from bilibili_video import VideoOptions, inspect_video
 async def main():
     result = await inspect_video(
         "https://www.bilibili.com/video/BV1xx411c7mD",
-        VideoOptions(frame_count=6),
+        VideoOptions(frame_count=0),  # 自适应抽帧；正数时指定数量且不设上限
         Path("video-cache"),
     )
     print(result.public())
@@ -95,7 +95,7 @@ asyncio.run(main())
 
 业务层按故事板真实 `index` / `pvdata` 时间戳取帧，Pillow 解码 JPEG/PNG；完整字幕及图像保存在独立缓存，返回值不包含完整视频或 Base64。后台任务的运行、取消、图片输入与结果回报由宿主负责。
 
-已完成公开视频元数据和 JPEG 故事板的独立读取核对，以及 SDK 适配、短链、缓存和产物的离线核对。首个 GitHub 导入及实际聊天回报仍属试验验证；网络、字幕可用性和模型的图片能力会影响最终结果。
+已完成公开视频元数据、真实故事板、重复链接本地缓存和较大手动帧数的实际读取核对；网络、字幕可用性和模型图片能力仍会影响每条视频的最终结果。
 
 ## 许可证与参考
 

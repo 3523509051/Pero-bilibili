@@ -40,7 +40,7 @@ def register():
             return _result(False, "unavailable", {"hint": "请提供完整的 HTTPS B 站视频链接"},
                            error={"code": "invalid_url", "message": "链接格式不受支持"})
         options = VideoOptions(
-            frame_count=int(sdk.config.get("frame_count", 6)),
+            frame_count=int(sdk.config.get("frame_count", 0)),
             refresh=refresh,
             subtitle_language=str(sdk.config.get("subtitle_language", "auto")),
             credential_domain="public",
@@ -48,6 +48,8 @@ def register():
         fetcher = SDKNetworkFetcher(
             lambda target, **kwargs: sdk.network.read(target, **kwargs),
             _declared_hosts(),
+            cache_dir=sdk.storage.cache_dir,
+            refresh=refresh,
         )
         try:
             result = await inspect_video(url, options, sdk.storage.cache_dir, fetcher=fetcher)

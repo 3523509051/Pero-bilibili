@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator, Iterable, Mapping
 
-SAMPLING_VERSION = "2"
+SAMPLING_VERSION = "3"
 SHEET_VERSION = "2"
 
 _LOCKS: dict[str, asyncio.Lock] = {}

@@ -70,6 +70,50 @@ def _excerpt(cues: Optional[list]) -> dict:
             "cue_count": len(cues), "source": "bilibili_subtitle"}
 
 
+def _change_score(left: bytes, right: bytes, width: int, height: int) -> float:
+    """Cheap normalized RGB difference on a 24x14 sample grid."""
+    total = 0
+    samples = 0
+    for gy in range(14):
+        y = min(height - 1, gy * height // 14)
+        for gx in range(24):
+            x = min(width - 1, gx * width // 24)
+            offset = (y * width + x) * 3
+            total += abs(left[offset] - right[offset])
+            total += abs(left[offset + 1] - right[offset + 1])
+            total += abs(left[offset + 2] - right[offset + 2])
+            samples += 3
+    return total / (samples * 255) if samples else 0.0
+
+
+def _adaptive_frames(frames: list[dict], covered: float) -> list[dict]:
+    """Keep scene changes plus duration anchors, with no fixed frame-count cap."""
+    if len(frames) <= 2:
+        return frames
+    ordered = sorted(frames, key=lambda frame: float(frame.get("actual_seconds") or 0))
+    stride = 30.0
+    anchors = {0.0, max(0.0, float(covered) - 0.1)}
+    cursor = stride
+    while cursor < covered:
+        anchors.add(cursor)
+        cursor += stride
+    anchor_tiles = {
+        min(ordered, key=lambda frame: abs(float(frame.get("actual_seconds") or 0) - anchor)).get("tile_index")
+        for anchor in anchors
+    }
+    chosen = [ordered[0]]
+    previous = ordered[0]
+    for frame in ordered[1:-1]:
+        gap = float(frame.get("actual_seconds") or 0) - float(previous.get("actual_seconds") or 0)
+        score = _change_score(previous["rgb"], frame["rgb"], int(frame["width"]), int(frame["height"]))
+        if frame.get("tile_index") in anchor_tiles or gap >= stride or score >= 0.12:
+            chosen.append(frame)
+            previous = frame
+    if ordered[-1] is not chosen[-1]:
+        chosen.append(ordered[-1])
+    return chosen
+
+
 async def _uncached(fetcher: Any, options: VideoOptions, cache_dir: Path,
                     ref: Any, view: Mapping[str, Any], page_info: Mapping[str, Any],
                     key: str, video_meta: dict, warnings: list) -> VideoResult:
@@ -88,12 +132,14 @@ async def _uncached(fetcher: Any, options: VideoOptions, cache_dir: Path,
             warnings.append("取不到故事板时间戳或拼图，画面不可用")
             coverage["method"] = "unavailable"
         else:
+            entries = sorted(set(entries))
             story_max = max(value for value, _ in entries)
             if story_max > 0:
                 covered = min(covered, story_max)
             coverage["covered_seconds"] = round(covered, 1)
-            targets = [covered * (index + 1) / (options.frame_count + 1)
-                       for index in range(options.frame_count)]
+            targets = ([covered * (index + 1) / (options.frame_count + 1)
+                        for index in range(options.frame_count)] if options.frame_count > 0
+                       else [seconds for seconds, _tile in entries])
             picked = [(target, *min(entries, key=lambda item: abs(item[0] - target))) for target in targets]
             tile_w = int(snapshot.get("img_x_size") or 480)
             tile_h = int(snapshot.get("img_y_size") or 270)
@@ -129,6 +175,8 @@ async def _uncached(fetcher: Any, options: VideoOptions, cache_dir: Path,
                                    "width": tile_w, "height": tile_h, "rgb": bytes(piece)})
                 except (ValueError, OSError, IndexError):
                     warnings.append(f"时间点 {want:.1f}s 的画面不可用")
+            if options.frame_count == 0:
+                frames = _adaptive_frames(frames, covered)
         if not TIMESTAMP_SUPPORT:
             warnings.append("Pillow 不可用，拼图未烧录时间戳（标准库 PNG 兜底）")
 

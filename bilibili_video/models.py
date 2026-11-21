@@ -9,7 +9,8 @@ from typing import Any, Mapping
 
 @dataclass(frozen=True)
 class VideoOptions:
-    frame_count: int = 6
+    # 0 lets the sampler choose frames from scene changes and the covered duration.
+    frame_count: int = 0
     refresh: bool = False
     subtitle_language: str = "auto"
     credential_domain: str = "public"
@@ -18,8 +19,8 @@ class VideoOptions:
     cache_ttl_hours: float = 24.0
 
     def __post_init__(self) -> None:
-        if not 1 <= int(self.frame_count) <= 12:
-            raise ValueError("frame_count 必须在 1-12")
+        if int(self.frame_count) < 0:
+            raise ValueError("frame_count 不能小于 0")
         if not self.credential_domain or len(self.credential_domain) > 80:
             raise ValueError("credential_domain 不合法")
 

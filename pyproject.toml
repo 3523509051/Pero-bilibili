@@ -1,6 +1,6 @@
 [project]
 name = "pero-video-bilibili-plugin"
-version = "0.1.2"
+version = "0.1.3"
 description = "Pero 插件 SDK v1：B站视频理解（独立 worker）"
 requires-python = ">=3.10"
 dependencies = ["httpx==0.28.1", "Pillow==11.3.0"]
