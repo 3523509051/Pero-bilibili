@@ -110,12 +110,20 @@ def register():
             "coverage": {key: result.coverage.get(key) for key in
                          ("page", "seconds", "covered_seconds", "method")},
             "cache": {"hit": bool(result.cache.get("hit", False))},
+            "frame_summary": {
+                "count": len(result.frames),
+                "first_seconds": result.frames[0].get("actual_seconds") if result.frames else None,
+                "last_seconds": result.frames[-1].get("actual_seconds") if result.frames else None,
+            },
         }
         if artifacts:
             data["image"] = {"attached": attached, "mime": mime, "count": len(artifacts)}
         if len(json.dumps(data, ensure_ascii=False)) > 2800:
-            data["frames"] = data["frames"][:1]
-            data["subtitle"]["excerpt"] = str(data["subtitle"].get("excerpt") or "")[:80]
+            # Compact metadata only: keep the actual frame total and time span.
+            # Published/attached images still contain ALL selected frames.
+            data.pop("frames")
+            data["frames_detail"] = "完整分镜见已挂载拼图；时间点列表已省略，不表示只处理了一帧。"
+            data["subtitle"]["excerpt"] = str(data["subtitle"].get("excerpt") or "")[:1200]
         try:
             sdk.events.emit("plugin.record", {
                 "tool": "watch_bilibili", "status": status,

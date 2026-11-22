@@ -3,7 +3,7 @@
   "id": "video.bilibili",
   "name": "B站视频理解",
   "description": "依据对话语义判断用户是否希望查看视频；结合当前或近期消息中的 B 站链接读取分P、字幕与故事板拼图。",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "sdk_version": "1",
   "entrypoint": "plugin_adapter:register",
   "license": "MIT",
