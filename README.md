@@ -2,7 +2,7 @@
 
 让 [Pero](https://github.com/3523509051/Pero) 理解对话中分享的 B 站视频。Agent 根据上下文判断是否需要观看；链接可以来自当前消息、微信引用卡片或近期对话。插件读取视频信息、可用字幕与故事板，生成带真实时间戳的分镜图，再交给 Agent 理解内容。
 
-**v0.1.4 · 公开试验版** · Pero Plugin SDK v1 RC · MIT License
+**v0.1.5 · 公开试验版** · Pero Plugin SDK v1 RC · MIT License
 
 ## 功能
 
@@ -17,7 +17,7 @@
 需要支持后台工具与受控短链读取的 **Pero Plugin SDK v1 RC**。
 
 1. 打开 Pero 控制站 → **插件** → **从 GitHub 固定版本安装**。
-2. 输入以下仓库地址，版本填写 `v0.1.4`。
+2. 输入以下仓库地址，版本填写 `v0.1.5`。
 
    ```text
    https://github.com/3523509051/Pero-bilibili

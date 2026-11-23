@@ -99,6 +99,9 @@ def register():
         if artifacts and not attached:
             status = "partial"
 
+        cache_body = {"hit": bool(result.cache.get("hit", False))}
+        if not cache_body["hit"] and result.cache.get("miss"):
+            cache_body["miss"] = str(result.cache.get("miss"))[:40]
         video = dict(result.video)
         data = {
             "video": {key: video.get(key) for key in
@@ -109,7 +112,7 @@ def register():
                          ("status", "language", "excerpt", "cue_count")},
             "coverage": {key: result.coverage.get(key) for key in
                          ("page", "seconds", "covered_seconds", "method")},
-            "cache": {"hit": bool(result.cache.get("hit", False))},
+            "cache": dict(cache_body),
             "frame_summary": {
                 "count": len(result.frames),
                 "first_seconds": result.frames[0].get("actual_seconds") if result.frames else None,

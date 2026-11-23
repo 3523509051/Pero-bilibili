@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import struct
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
@@ -140,7 +141,21 @@ async def _uncached(fetcher: Any, options: VideoOptions, cache_dir: Path,
             targets = ([covered * (index + 1) / (options.frame_count + 1)
                         for index in range(options.frame_count)] if options.frame_count > 0
                        else [seconds for seconds, _tile in entries])
-            picked = [(target, *min(entries, key=lambda item: abs(item[0] - target))) for target in targets]
+            # 同一块素材只取一次：先在未用候选里找最近时间点，再按实际时间排序。
+            # 时间戳不均匀时也能用满候选，不会把“目标碰撞”误报成素材不足。
+            picked: list[tuple[float, float, int]] = []
+            remaining = list(entries)
+            for target in targets:
+                if not remaining:
+                    break
+                actual, tile = min(remaining, key=lambda item: (abs(item[0] - target), item[1]))
+                remaining.remove((actual, tile))
+                picked.append((target, actual, tile))
+            picked.sort(key=lambda item: item[1])
+            if len(picked) < len(targets):
+                warnings.append(
+                    f"可用故事板素材不足：请求 {len(targets)} 帧，实际 {len(picked)} 帧"
+                    f"（可用素材 {len(entries)} 块）")
             tile_w = int(snapshot.get("img_x_size") or 480)
             tile_h = int(snapshot.get("img_y_size") or 270)
             if not (16 <= tile_w <= 1024 and 16 <= tile_h <= 1024):
@@ -156,7 +171,13 @@ async def _uncached(fetcher: Any, options: VideoOptions, cache_dir: Path,
                     sheets[index] = decode_image(await fetcher.storyboard_image(images[index]))
                 return sheets[index]
 
-            first_width, first_height, _ = await sheet(0)
+            try:
+                first_width, first_height, _ = await sheet(0)
+            except (ValueError, OSError, IndexError, RuntimeError, KeyError):
+                # 故事板图片整体读不到：降级为无画面，不让整次调用失败。
+                warnings.append("故事板图片读取失败，画面不可用")
+                picked = []
+                first_width = first_height = 0
             cap = max(1, (first_width // tile_w) * (first_height // tile_h))
             for want, actual, tile in picked:
                 try:
@@ -173,8 +194,10 @@ async def _uncached(fetcher: Any, options: VideoOptions, cache_dir: Path,
                                    "actual_seconds": round(actual, 1),
                                    "tile_index": tile, "sheet_index": sheet_no,
                                    "width": tile_w, "height": tile_h, "rgb": bytes(piece)})
-                except (ValueError, OSError, IndexError):
+                except (ValueError, OSError, IndexError, RuntimeError, KeyError):
                     warnings.append(f"时间点 {want:.1f}s 的画面不可用")
+            if len(frames) < len(picked):
+                warnings.append(f"其中 {len(picked) - len(frames)} 帧画面读取失败")
             if options.frame_count == 0:
                 frames = _adaptive_frames(frames, covered)
         if not TIMESTAMP_SUPPORT:
@@ -182,7 +205,8 @@ async def _uncached(fetcher: Any, options: VideoOptions, cache_dir: Path,
 
     cues = await fetcher.subtitles(ref.bvid, cid, options.subtitle_language)
     subtitles = _excerpt(cues)
-    sub_meta = await cache_store.save_subtitles(Path(cache_dir), key, cues) if cues else {}
+    # 只算引用与哈希，不落盘：字幕、拼图、索引一起提交，失败不覆盖旧有效产物。
+    sub_meta = cache_store.subtitle_meta(Path(cache_dir), key, cues) if cues else {}
     subtitles.update(sub_meta)
     sheet_bytes = b""
     mime = ""
@@ -209,8 +233,14 @@ async def _uncached(fetcher: Any, options: VideoOptions, cache_dir: Path,
               "frames": [{k: v for k, v in item.items() if k != "rgb"} for item in frames],
               "coverage": coverage, "subtitles": subtitles, "artifacts": list(artifacts),
               "warnings": warnings, "created_at": created,
-              "expires_at": created, "cache_ttl_hours": options.cache_ttl_hours, **sub_meta}
-    stored = await cache_store.save(Path(cache_dir), key, record, sheet_bytes) if sheet_bytes else {}
+              "expires_at": cache_store.expires_at(created, options.cache_ttl_hours),
+              "cache_ttl_hours": options.cache_ttl_hours, **sub_meta}
+    stored = (await cache_store.save(Path(cache_dir), key, record, sheet_bytes,
+                                     subtitle_cues=cues if cues else None)) if sheet_bytes else {}
+    if not stored:
+        # 本轮没有提交任何派生产物：不要给出指向不存在文件的字幕引用。
+        subtitles.pop("subtitle_path", None)
+        subtitles.pop("subtitle_sha256", None)
     artifacts = ({"kind": "contact_sheet", "path": stored["path"], "mime": mime,
                   "sha256": stored["sha256"], "size_bytes": len(sheet_bytes)},) if stored else ()
     return VideoResult(True, status, video=video_meta,
@@ -241,10 +271,11 @@ async def inspect_video(url: str, options: VideoOptions, cache_dir: Path,
                   "canonical_url": f"https://www.bilibili.com/video/{ref.bvid}?p={ref.page}"}
     key = cache_store.cache_key(ref.bvid, cid, ref.page, options.frame_count,
                                 options.subtitle_language, options.credential_domain)
-    async with cache_store.key_lock(key):
+    async with cache_store.key_lock(key, cache_dir=Path(cache_dir)):
+        miss = ""
         if not options.refresh:
-            cached = await cache_store.load(Path(cache_dir), key,
-                                            max_age_seconds=options.cache_ttl_hours * 3600)
+            cached, miss = await cache_store.load_detail(
+                Path(cache_dir), key, max_age_seconds=options.cache_ttl_hours * 3600)
             if cached is not None:
                 return VideoResult(
                     True, str(cached.get("status") or "partial"),
@@ -256,5 +287,9 @@ async def inspect_video(url: str, options: VideoOptions, cache_dir: Path,
                     artifacts=tuple(cached.get("artifacts") or ()),
                     warnings=tuple(cached.get("warnings") or ()),
                 )
-        return await _uncached(fetcher, options, cache_dir, ref, view, page_info,
-                               key, video_meta, [])
+        result = await _uncached(fetcher, options, cache_dir, ref, view, page_info,
+                                 key, video_meta, [])
+        if miss and not options.refresh:
+            # 如实说明为何没命中：缺失/过期/损坏/缺图/哈希不符，不冒充命中。
+            result = replace(result, cache={**dict(result.cache), "miss": miss})
+        return result
